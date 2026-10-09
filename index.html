@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>AI社員ビルダー v2</title>
+<title>AI社員ビルダー</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
@@ -265,7 +265,7 @@ function parseReply(text) {
   if (i < 0 || j <= i) return null;
   try { const d = JSON.parse(s.slice(i, j + 1)); return d && Array.isArray(d.flows) && d.flows.length ? d : null; } catch (e) { return null; }
 }
-const BUILD_HEAD = '構築へ（AI社員ビルダー v2 で修正したフロー）\n\n以下は、AI社員ビルダー v2 で図にして修正したフローです。チームの材料の【最初の1体】のうち、名前・役割・ルール・フローは、こちらを最新として構築を進めてください。材料のほかの項目は、そのまま使ってください。\n\n';
+const BUILD_HEAD = '構築へ（AI社員ビルダーの図で修正したフロー）\n\n以下は、AI社員ビルダーで図にして修正したフローです。チームの材料の【最初の1体】のうち、名前・役割・ルール・フローは、こちらを最新として構築を進めてください。材料のほかの項目は、そのまま使ってください。\n\n';
 const REFINE = '次のAIエージェント用プロンプトを、意味・手順・ルールを一切変えずに、AIが従いやすい自然で明確な日本語に整えてください。見出し構成は維持し、整えたプロンプト本文のみを出力してください。';
 function copyText(t, done) {
   const fb = () => { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done && done(); } catch (e) {} ta.remove(); };
@@ -343,7 +343,7 @@ class App extends React.Component {
   createFromReply() {
     const { reply, prompt, name } = this.state.create;
     const def = parseReply(reply || '');
-    if (!def) { this.setState(s => ({ create: { ...s.create, error: '読み取れませんでした。「v2用データ」の枠の中身、またはChatGPTの返答を、最初から最後までそのまま貼ってください。' } })); return; }
+    if (!def) { this.setState(s => ({ create: { ...s.create, error: '読み取れませんでした。「取り込み用データ」の枠の中身、またはChatGPTの返答を、最初から最後までそのまま貼ってください。' } })); return; }
     this.buildAgent(def, prompt || '', name || '');
   }
   buildAgent(def, prompt, name) {
@@ -657,7 +657,7 @@ class App extends React.Component {
         </label>
         <div style=${{ background: '#F2F9FC', padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style=${{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span class="label-cyan">ChatGPTから取り込む</span><span style=${{ fontSize: 12, color: '#666' }}>会社のChatGPTで作った設計を、そのまま図にします</span></div>
-          <div style=${{ fontSize: 13, lineHeight: 1.8 }}><b>AI社員ビルダー（ChatGPTのプラグイン）で設計した場合</b><br/>ステップ2の最後に出る「v2用データ」の枠をコピーして、下の欄に貼り、「取り込んで作成」を押します。</div>
+          <div style=${{ fontSize: 13, lineHeight: 1.8 }}><b>AI社員ビルダー（ChatGPTのプラグイン）で設計した場合</b><br/>ステップ2の最後に出る「取り込み用データ」の枠をコピーして、下の欄に貼り、「取り込んで作成」を押します。</div>
           <div style=${{ fontSize: 13, lineHeight: 1.8 }}><b>まだ設計していない場合</b></div>
           <ol style=${{ margin: '-8px 0 0', paddingLeft: '1.3em', fontSize: 13, lineHeight: 1.8, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <li>上の「プロンプト」に、任せたい仕事を書きます</li>
@@ -668,8 +668,8 @@ class App extends React.Component {
             <button class="pill pill-o h6" style=${{ padding: '8px 18px' }} onClick=${() => { if (!create.prompt.trim()) { this.setState(s => ({ create: { ...s.create, error: '先に「プロンプト」へ任せたい仕事を書いてください。' } })); return; } copyText(chatgptRequest(create.prompt), () => this.setState(s => ({ create: { ...s.create, copied: true } }))); }}><${Icon} name="copy"/>${create.copied ? 'コピーしました' : '依頼文をコピー'}</button>
             <a class="link h5" href=${CHATGPT_URL} target="_blank" rel="noopener" style=${{ textDecoration: 'none' }}>ChatGPTを開く ↗</a>
           </div>
-          <label class="fld">v2用データ／ChatGPTの返答
-            <textarea id="create-reply" rows="5" value=${create.reply} onChange=${setC('reply')} placeholder='例：{"format":"ai-shain-builder-v2","name":"朝のTODO係","flows":[…]}' style=${{ fontSize: 13 }}></textarea>
+          <label class="fld">取り込み用データ／ChatGPTの返答
+            <textarea id="create-reply" rows="5" value=${create.reply} onChange=${setC('reply')} placeholder='例：{"format":"ai-shain-builder","name":"朝のTODO係","flows":[…]}' style=${{ fontSize: 13 }}></textarea>
           </label>
           <div><button class="pill pill-p h6" style=${{ padding: '8px 20px' }} onClick=${() => this.createFromReply()}><${Icon} name="file-export"/>取り込んで作成</button></div>
         </div>
