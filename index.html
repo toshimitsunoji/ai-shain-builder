@@ -631,6 +631,7 @@ class App extends React.Component {
         <div style=${{ display: 'flex', flexDirection: 'column', gap: 4 }}><div class="eyebrow">管理画面</div><h1 class="h1">AI社員の管理</h1></div>
         <div style=${{ fontSize: 14, color: '#666' }}>登録数 ${store.agents.length}</div>
       </div>
+      <div class="notebox" role="note" style=${{ fontSize: 13 }}>作ったAI社員のデータは、使う人それぞれのブラウザに保存され、クラウドには送られません。<br/><span style=${{ color: '#666' }}>※別のPCやブラウザには引き継がれません。ChatGPTに貼った内容や、Claudeで組み立てる機能に使った内容は、それぞれのサービスに送られます。</span></div>
       <div class="card">${rows}
         ${!store.agents.length && html`<div style=${{ padding: '48px 24px', textAlign: 'center', fontSize: 14, color: '#666', lineHeight: 1.8 }}>AI社員が登録されていません。右上の「新規作成」からプロンプトを貼り付けて作成してください。</div>`}
       </div>
