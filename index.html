@@ -43,6 +43,8 @@ button{cursor:pointer}
 .pill-p{background:var(--mdb-navy);color:#fff;border:0;font-weight:700}
 .pill-o{background:#fff;color:var(--mdb-blue);border:1px solid var(--mdb-blue)}
 .sq{border-radius:0}
+.tplgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.tplcard{display:flex;flex-direction:column;gap:4px;text-align:left;background:#fff;border:1px solid var(--mdb-rule);border-left:4px solid var(--mdb-cyan);padding:14px 16px;font-family:inherit;color:var(--mdb-ink)}
 .tag{font-size:11px;color:var(--mdb-cyan);border:1px solid var(--mdb-cyan);padding:1px 6px;line-height:1.5;white-space:nowrap}
 .scroll-ice{overflow:auto;background:var(--mdb-ice)}
 .page{margin:0 auto;padding:48px 24px 60px;display:flex;flex-direction:column;gap:24px}
@@ -217,14 +219,14 @@ const SAMPLE = () => ({
     ], 'd') },
   },
 });
-const SYS = `あなたはAI社員（業務エージェント）の設計者です。下の「プロンプト」を読み、エージェント定義をJSONのみで出力してください。前置き・説明・コードブロック記号は不要です。
+const SYS = `あなたはAI社員（業務エージェント）の設計者です。下の「プロンプト」を読み、エージェント定義をJSONで出力してください。前置き・説明は不要です。
 形式：{"name":"役割名（〜係など15字以内）","purpose":"目的を1文","saves":"保存するもの","donts":["実行しないこと"],"flows":[{"name":"フロー名","status":"下書き","note":"補足1文","nodes":[{"type":"human|ai|external|program","title":"20字以内","desc":"30字以内","tool":"使用ツール（なければ空）","choices":"本人ノードでの判断の選択肢を読点区切り（本人ノードのみ）","output":"実行時の出力例を1文","after":[前の手順の番号（1から数える。省略すると直前の手順）]}]}]}
-ルール：human=本人（依頼・判断）、ai=AIの処理、external=Web検索や外部サービス、program=スケジュールなどの自動処理。フローは1〜2本、各3〜8ノード。並行して進められる手順は、after に同じ前の手順の番号を入れて並列にし、合流する手順は after に複数の番号を入れる。定期実行が読み取れる場合はprogramノードから始める。最後は本人が結果を確認・判断するノードにする。です・ます調は不要、簡潔な体言止めで。`;
+ルール：human=本人（依頼・判断）、ai=AIの処理（考える・まとめる・書く）、external=調べる・つなぐ（Web検索、メール・ドライブなどの連携サービス、ファイルや画面の操作）、program=決まった時刻やイベントで動き出す最初の手順（定期実行など）。after は最初の手順には入れない。社名・取引先・個人名・金額は書かず、「取引先A社」のようにぼかす。フローは1〜2本、各3〜8ノード。並行して進められる手順は、after に同じ前の手順の番号を入れて並列にし、合流する手順は after に複数の番号を入れる。定期実行が読み取れる場合はprogramノードから始める。最後は本人が結果を確認・判断するノードにする。です・ます調は不要、簡潔な体言止めで。`;
 
 /* ---------- local parser (no AI): AI社員ビルダーの「チームの材料」を読む ---------- */
 function clip(s, n) { s = (s || '').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 function field(txt, key) { const m = txt.match(new RegExp('^[\\-・\\s]*' + key + '[^：:\\n]*[：:]\\s*(.+)$', 'm')); return m ? m[1].trim() : ''; }
-const METHOD = { '1': 'ai', '2': 'external', '3': 'program', '4': 'external', '5': 'program' };
+const METHOD = { '1': 'ai', '2': 'external', '3': 'external', '4': 'external', '5': 'external' };
 const CIRCLED = { '①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5' };
 function parseMaterial(txt) {
   if (!/【最初の1体】/.test(txt)) return null;
@@ -256,6 +258,8 @@ function parseFallback(prompt) {
 }
 
 /* ---------- ChatGPT との受け渡し ---------- */
+/* かんたんコースのテンプレート（ChatGPTプラグインの references/templates.md と同じ元データ） */
+const TEMPLATES = [{"id": "asa-mail", "when": "平日の毎朝8時", "short": "今日のTODOを自分宛てメールで届ける", "def": {"format": "ai-shain-builder", "name": "朝の受信メール整理係", "purpose": "毎朝、前日からの受信メールを読み、今日対応が必要なものをTODOにまとめて自分宛てに送る", "saves": "報告", "donts": ["自分以外へのメール送信", "メールの削除・移動・既読の変更"], "template": "朝の受信メール整理係", "flows": [{"name": "定期実行", "status": "下書き", "note": "報告：自分宛ての Outlook メール1通（件名：【AI社員】今日のTODO（月/日））。急ぎ・今日中・返信待ちの3つに分け、各行に差出人の種類と元のメールの件名を添える。読めなかったときも、読めなかった理由を書いて送る", "nodes": [{"type": "program", "title": "平日の毎朝8時に起動", "desc": "ChatGPTのスケジュール", "tool": "スケジュール", "output": "朝8時の定期実行が始まりました。"}, {"type": "external", "title": "受信メールを読む", "desc": "前日8時以降の受信トレイ", "tool": "Outlook", "output": "前日8時以降の受信メール32件を読みました。"}, {"type": "ai", "title": "対応の要否を仕分け", "desc": "急ぎ・今日中・返信待ち", "output": "対応が必要なメールを9件に絞りました。"}, {"type": "ai", "title": "今日のTODOにまとめる", "desc": "1行に1件・件名を添える", "output": "今日のTODOを9件にまとめました。"}, {"type": "external", "title": "自分宛てにメール送信", "desc": "件名【AI社員】今日のTODO", "tool": "Outlook", "output": "自分宛てに「【AI社員】今日のTODO」を送りました。"}, {"type": "human", "title": "TODOを確認する", "desc": "対応するものを決める", "tool": "Outlook", "choices": "対応する、あとで、不要"}]}]}}, {"id": "kaigi-junbi", "when": "平日の毎朝7時45分", "short": "今日の会議の準備メモを自分宛てメールで届ける", "def": {"format": "ai-shain-builder", "name": "会議準備係", "purpose": "毎朝、今日の予定と関連メールから、会議ごとの目的・確認事項・資料を1枚にまとめて自分宛てに送る", "saves": "報告", "donts": ["自分以外へのメール送信", "予定の作成・変更・削除、出欠の返事"], "template": "会議準備係", "flows": [{"name": "定期実行", "status": "下書き", "note": "報告：自分宛ての Outlook メール1通（件名：【AI社員】今日の会議準備（月/日））。時刻順に、会議名・目的・確認しておくこと・関係するメールの件名と添付を並べる。関係するメールが見つからない会議は「関係メールなし」と書く", "nodes": [{"type": "program", "title": "平日の毎朝7時45分に起動", "desc": "ChatGPTのスケジュール", "tool": "スケジュール", "output": "朝7時45分の定期実行が始まりました。"}, {"type": "external", "title": "今日の予定を読む", "desc": "Outlookカレンダー", "tool": "Outlook", "output": "今日の予定5件を読みました。"}, {"type": "external", "title": "関係するメールを探す", "desc": "件名・参加者・添付から", "tool": "Outlook", "output": "4件の会議に関係するメールを見つけました。"}, {"type": "ai", "title": "会議ごとに要点をまとめる", "desc": "目的・確認事項・資料", "output": "会議ごとの準備メモを作りました。"}, {"type": "external", "title": "自分宛てにメール送信", "desc": "件名【AI社員】今日の会議準備", "tool": "Outlook", "output": "自分宛てに「【AI社員】今日の会議準備」を送りました。"}, {"type": "human", "title": "準備メモを確認する", "desc": "足りない準備を決める", "tool": "Outlook", "choices": "準備する、そのまま、確認を頼む"}]}]}}, {"id": "raishu-junbi", "when": "毎週金曜16時", "short": "来週のTODOを自分宛てメールで届ける", "def": {"format": "ai-shain-builder", "name": "来週の準備係", "purpose": "毎週金曜の夕方、来週1週間の予定と関連メールから、来週対応が必要なものをTODOにまとめて自分宛てに送る", "saves": "報告", "donts": ["自分以外へのメール送信", "予定の作成・変更・削除、メールの返信"], "template": "来週の準備係", "flows": [{"name": "定期実行", "status": "下書き", "note": "報告：自分宛ての Outlook メール1通（件名：【AI社員】来週のTODO（月/日〜月/日））。曜日ごとに「準備が要る会議」「期限のある依頼」「返事待ち・確認待ち」に分け、各TODOに期限・関係する予定・元のメールの件名を1行で添える", "nodes": [{"type": "program", "title": "毎週金曜16時に起動", "desc": "ChatGPTのスケジュール", "tool": "スケジュール", "output": "金曜16時の定期実行が始まりました。"}, {"type": "external", "title": "来週の予定を読む", "desc": "来週月〜金のカレンダー", "tool": "Outlook", "output": "来週の予定18件を読みました。", "after": [1]}, {"type": "external", "title": "期限・依頼のメールを探す", "desc": "過去2週間の受信メール", "tool": "Outlook", "output": "期限や依頼が書かれたメール7件を見つけました。", "after": [1]}, {"type": "ai", "title": "曜日ごとのTODOにまとめる", "desc": "準備・期限・返事待ち", "output": "来週のTODOを曜日ごとに12件にまとめました。", "after": [2, 3]}, {"type": "external", "title": "自分宛てにメール送信", "desc": "件名【AI社員】来週のTODO", "tool": "Outlook", "output": "自分宛てに「【AI社員】来週のTODO」を送りました。"}, {"type": "human", "title": "来週の段取りを決める", "desc": "TODOを読んで判断", "tool": "Outlook", "choices": "対応する、調整する、不要"}]}]}}, {"id": "henshin-shitagaki", "when": "頼んだとき", "short": "返信文を書いてOutlookの下書きに入れる", "def": {"format": "ai-shain-builder", "name": "返信下書き係", "purpose": "頼んだときに、指定したメールへの返信文の下書きを作り、Outlook の下書きに保存する（送信は本人）", "saves": "報告", "donts": ["メールの送信（下書きまで）", "メールの削除・移動"], "template": "返信下書き係", "flows": [{"name": "チャットで頼む", "status": "下書き", "note": "報告：チャットに返信文を表示し、下書きに保存したら「下書きに保存しました（件名）」と1行で知らせる。メールが見つからないときは候補を3件まで示して選んでもらう", "nodes": [{"type": "human", "title": "返信したいメールを伝える", "desc": "件名や差出人で指定", "tool": "ChatGPT", "output": "「見積もりの件に返信」と依頼を受けました。"}, {"type": "external", "title": "メールとやり取りを読む", "desc": "Outlookで探して読む", "tool": "Outlook", "output": "対象のメールと過去のやり取り3通を読みました。"}, {"type": "ai", "title": "返信文を書く", "desc": "文体と署名に合わせる", "output": "返信文の案を書きました。"}, {"type": "human", "title": "文面を確認する", "desc": "直したい所を伝える", "tool": "ChatGPT", "choices": "このまま、直す、やめる"}, {"type": "external", "title": "Outlookの下書きに保存", "desc": "送信はしない", "tool": "Outlook", "output": "Outlookの下書きに保存しました。"}, {"type": "human", "title": "見直して送信する", "desc": "本人がOutlookで送る", "tool": "Outlook", "choices": "送信した、保留"}]}]}}, {"id": "kaigi-memo", "when": "頼んだとき", "short": "会議メモを決定事項とTODOに整理する", "def": {"format": "ai-shain-builder", "name": "会議メモまとめ係", "purpose": "頼んだときに、会議のメモや文字起こしを決定事項・TODO・担当・期限に整理し、共有メールの下書きと自分宛てのTODOメールを作る", "saves": "報告", "donts": ["自分以外へのメール送信（共有メールは下書きまで）", "メールの削除・移動"], "template": "会議メモまとめ係", "flows": [{"name": "チャットで頼む", "status": "下書き", "note": "報告：チャットに整理結果を表示する。共有メールは Outlook の下書きに保存し、自分のTODOは自分宛てメール（件名：【AI社員】会議のTODO（会議名））で送る。担当や期限が読み取れないものは「担当未定」「期限未定」と書く", "nodes": [{"type": "human", "title": "メモや文字起こしを貼る", "desc": "会議名も伝える", "tool": "ChatGPT", "output": "会議メモを受け取りました。"}, {"type": "ai", "title": "決定事項とTODOに整理", "desc": "担当・期限・持ち越し", "output": "決定事項3件、TODO6件に整理しました。"}, {"type": "human", "title": "整理結果を確認する", "desc": "直したい所を伝える", "tool": "ChatGPT", "choices": "このまま、直す"}, {"type": "external", "title": "共有メールを下書き保存", "desc": "送信はしない", "tool": "Outlook", "output": "共有メールをOutlookの下書きに保存しました。", "after": [3]}, {"type": "external", "title": "自分のTODOを自分宛てに送る", "desc": "件名【AI社員】会議のTODO", "tool": "Outlook", "output": "自分宛てに会議のTODOを送りました。", "after": [3]}, {"type": "human", "title": "共有メールを見直して送信", "desc": "本人がOutlookで送る", "tool": "Outlook", "choices": "送信した、保留", "after": [4, 5]}]}]}}];
 const CHATGPT_URL = 'https://chatgpt.com/';
 function chatgptRequest(desc) { return SYS + '\n\n返答は、上の形式のJSONだけにしてください（```json で囲んでもかまいません）。\n\nプロンプト：\n' + desc.trim(); }
 function parseReply(text) {
@@ -266,7 +270,7 @@ function parseReply(text) {
   try { const d = JSON.parse(s.slice(i, j + 1)); return d && Array.isArray(d.flows) && d.flows.length ? d : null; } catch (e) { return null; }
 }
 const BUILD_HEAD = '構築へ（AI社員ビルダーの図で修正したフロー）\n\n以下は、AI社員ビルダーで図にして修正したフローです。チームの材料の【最初の1体】のうち、名前・役割・ルール・フローは、こちらを最新として構築を進めてください。材料のほかの項目は、そのまま使ってください。\n\n';
-const REFINE = '次のAIエージェント用プロンプトを、意味・手順・ルールを一切変えずに、AIが従いやすい自然で明確な日本語に整えてください。見出し構成は維持し、整えたプロンプト本文のみを出力してください。';
+const REFINE = '次のAIエージェント用プロンプトを、意味・手順・ルールを一切変えずに、AIが従いやすい自然で明確な日本語に整えてください。見出し構成は維持してください。【】の中の種類名、手順の番号、選択肢、ツール名、「並行して進めてかまいません」「…がすべて終わってから進めてください」の文は、そのまま残してください。整えたプロンプト本文のみを出力してください。';
 function copyText(t, done) {
   const fb = () => { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done && done(); } catch (e) {} ta.remove(); };
   try { if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => done && done(), fb); else fb(); } catch (e) { fb(); }
@@ -360,7 +364,7 @@ class App extends React.Component {
   buildAgent(def, prompt, name) {
     const order = [], flows = {};
     def.flows.forEach((f, i) => { const k = uid('f') + i; order.push(k); flows[k] = { name: f.name || 'フロー' + (i + 1), status: f.status || '下書き', note: f.note || '', ...linear(f.nodes || [], k + 'n') }; });
-    this.addAgent({ id: uid('a'), name: name.trim() || def.name || '新しいAI社員', purpose: def.purpose || '', saves: def.saves || '', donts: Array.isArray(def.donts) ? def.donts.join('\n') : (def.donts || ''), prompt, updatedAt: stamp(), order, flows });
+    this.addAgent({ id: uid('a'), name: name.trim() || def.name || '新しいAI社員', purpose: def.purpose || '', saves: def.saves || '', donts: Array.isArray(def.donts) ? def.donts.join('\n') : (def.donts || ''), prompt, template: def.template || '', updatedAt: stamp(), order, flows });
   }
   duplicateAgent(id) {
     const a = this.state.store.agents.find(x => x.id === id); if (!a) return;
@@ -510,9 +514,12 @@ class App extends React.Component {
   compilePrompt(scope) {
     const a = this.agent(); if (!a) return '';
     const L = [];
-    L.push('# ' + a.name, '', '## 役割', 'あなたは「' + a.name + '」です。' + (a.purpose || ''));
+    L.push('# ' + a.name);
+    if (a.template) L.push('', 'コース：かんたん（テンプレート：' + a.template + '）');
+    L.push('', '## 役割', 'あなたは「' + a.name + '」です。' + (a.purpose || ''));
     const donts = (a.donts || '').split('\n').map(s => s.trim()).filter(Boolean);
-    if (a.saves || donts.length) { L.push('', '## ルール'); if (a.saves) L.push('- 次の内容を保存してください：' + a.saves); donts.forEach(d => L.push('- ' + d + 'は実行しないでください。')); }
+    L.push('', '## ルール'); if (a.saves) L.push('- 次の内容を保存してください：' + a.saves); donts.forEach(d => L.push('- ' + d + 'は実行しないでください。'));
+    L.push('- うまくいかない手順があったときは、そこで止めて、何ができて何ができなかったかを本人に報告してください。推測で先に進めないでください。');
     const keys = scope === 'all' ? a.order : [this.state.flowKey];
     keys.filter(k => a.flows[k]).forEach(k => {
       const f = a.flows[k], ids = this.topo(f), by = Object.fromEntries(f.nodes.map(n => [n.id, n]));
@@ -530,7 +537,8 @@ class App extends React.Component {
         if (n.tool) L.push('   - 使用ツール：' + n.tool);
         if (n.type === 'human' && i > 0) { const ch = (n.choices || '').split(/[、,]/).map(s => s.trim()).filter(Boolean); L.push('   - ここで作業を止め、本人に判断を求めてください。' + (ch.length ? '選択肢：' + ch.join('／') : '')); }
         else if (n.type === 'human') L.push('   - 本人からの依頼・入力を受け取って開始します。');
-        else if (n.type === 'program') L.push('   - この手順はプログラムが自動で行います。');
+        else if (n.type === 'program') L.push(i === 0 ? '   - 決まった時刻やイベントで自動的に始まる手順です。その仕組みをまだ作っていないときは、本人が頼んだときに始めてください。' : '   - 定期実行などの仕組みが自動で行う手順です。その仕組みをまだ作っていないときは、ここで行う作業を自分で行ってください。');
+        else if (n.type === 'external') L.push('   - 接続済みの連携（プラグイン・コネクタ）や Web 検索を使ってください。使えないときは、無理に進めず、ここで止めて本人に知らせてください。');
         if (n.output) L.push('   - 出力の例：' + n.output);
         const next = f.edges.filter(e => e.from === id).map(e => by[e.to] && by[e.to].title).filter(Boolean);
         if (next.length > 1) L.push('   - 次の手順：' + next.join('、'));
@@ -547,7 +555,7 @@ class App extends React.Component {
     const ai = this.state.ai; if (!ai) return;
     this.setState({ exportRefining: true, exportNote: '' });
     try {
-      const r = await ai('次のAIエージェント用プロンプトを、意味・手順・ルールを一切変えずに、AIが従いやすい自然で明確な日本語に整えてください。見出し構成は維持し、整えたプロンプト本文のみを出力してください。\n\n---\n' + this.state.exportText, { modelTier: 'default' });
+      const r = await ai(REFINE + '\n\n---\n' + this.state.exportText, { modelTier: 'default' });
       this.setState({ exportText: r.text.trim(), exportRefining: false, exportCopied: false });
     } catch (e) { this.setState({ exportRefining: false, exportNote: e && e.code === 'not_granted' ? 'Claudeの利用が許可されなかったため、整えられませんでした。' : '文章を整えられませんでした。少し待ってからもう一度お試しください。' }); }
   }
@@ -657,11 +665,21 @@ class App extends React.Component {
     return html`<div class="scroll-ice"><div class="page" style=${{ maxWidth: 820 }}>
       <div style=${{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div class="eyebrow">新規作成</div>
-        <h1 class="h1">プロンプトからAI社員を作成</h1>
-        <p style=${{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.75, textWrap: 'pretty' }}>AI社員に任せたい業務のプロンプトを貼り付けてください。役割・目的・ルール・フローを自動で組み立てます。作成後はフロー画面で自由に編集できます。</p>
+        <h1 class="h1">AI社員を作成</h1>
+        <p style=${{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.75, textWrap: 'pretty' }}>よく使うAI社員はテンプレートから選べます。自分の仕事に合わせて作るときは、下の「じっくり」に任せたい業務のプロンプトを貼り付けてください。どちらも作成後はフロー画面で自由に編集できます。</p>
         <p style=${{ margin: 0, fontSize: 12, color: '#666', lineHeight: 1.7 }}>${ai ? '※AI社員ビルダーの「チームの材料」を貼ると、その内容のとおりにフローを作ります。それ以外のプロンプトはClaudeが読み取って組み立てます。' : '※AI社員ビルダーの「チームの材料」を貼ると、その内容のとおりにフローを作ります。それ以外のプロンプトは、下の「ChatGPTから取り込む」を使うと、内容に合ったフローになります（そのまま作成すると基本の流れになります）。'}</p>
       </div>
+      <div class="card" style=${{ padding: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style=${{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span class="label-cyan">かんたん：テンプレートから作る</span><span style=${{ fontSize: 12, color: '#666' }}>よく使うAI社員を選ぶだけで、流れの図ができます</span></div>
+        <div class="tplgrid">${TEMPLATES.map(t => html`<button key=${t.id} class="tplcard h7" onClick=${() => this.buildAgent(JSON.parse(JSON.stringify(t.def)), '', '')}>
+          <span style=${{ fontSize: 15, fontWeight: 700, color: '#12439B' }}>${t.def.name}</span>
+          <span style=${{ fontSize: 12, color: '#00A5E5', fontWeight: 700 }}>${t.when}</span>
+          <span style=${{ fontSize: 13, lineHeight: 1.6 }}>${t.short}</span>
+        </button>`)}</div>
+        <div class="notebox">作ったあとは、右上の「プロンプト出力」→「ChatGPTで構築を続ける」で、ChatGPT（AI社員ビルダーのプラグイン）に貼って送ると、10分ほどで使える形に組み立てます。時刻や除外したい予定は、そのとき聞かれます。ChatGPTで「AI社員ビルダーを始めてください」と送り、番号で選んでも同じものが作れます。</div>
+      </div>
       <div class="card" style=${{ padding: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div class="label-cyan">じっくり：プロンプトから作る</div>
         <label class="fld" style=${{ fontSize: 14 }}>AI社員の名前<span style=${{ fontWeight: 400, fontSize: 12, color: '#666' }}>未入力の場合はプロンプトから自動で付けます</span>
           <input id="create-name" value=${create.name} onChange=${setC('name')} placeholder="例：新規事業アイデア係" style=${{ padding: '10px 12px', fontSize: 15 }}/>
         </label>
@@ -766,7 +784,7 @@ class App extends React.Component {
       props = html`
       <div class="label-cyan">ノード（手順）</div>
       ${note}
-      ${fld('種別', html`<select id="node-type" value=${selNode.type} onChange=${setN('type')}><option value="human">本人</option><option value="ai">AI</option><option value="external">調べる・つなぐ</option><option value="program">プログラム</option></select>`, html`<ul class="typehelp"><li>本人：依頼・確認・判断をする人の手順。途中に置くと、そこで止まって判断を待ちます</li><li>AI：考える・まとめる・書く手順</li><li>調べる・つなぐ：Web検索で調べる手順や、メール・ドライブ・チャットなど、ふだん使っているサービスとつないで読み書きする手順</li><li>プログラム：定期実行や、決まった自動処理</li></ul>`, '手順の頭の【本人】【AI】など')}
+      ${fld('種別', html`<select id="node-type" value=${selNode.type} onChange=${setN('type')}><option value="human">本人</option><option value="ai">AI</option><option value="external">調べる・つなぐ</option><option value="program">プログラム</option></select>`, html`<ul class="typehelp"><li>本人：依頼・確認・判断をする人の手順。途中に置くと、そこで止まって判断を待ちます</li><li>AI：考える・まとめる・書く手順</li><li>調べる・つなぐ：Web検索で調べる手順や、メール・ドライブ・チャットなど、ふだん使っているサービスとつないで読み書きする手順。パソコンのファイルや画面の操作も含みます</li><li>プログラム：決まった時刻やイベントで自動的に始まる手順（定期実行など）。ふつうは最初の手順に使います</li></ul>`, '手順の頭の【本人】【AI】など')}
       ${fld('タイトル', html`<input id="node-title" value=${selNode.title} onChange=${setN('title')} placeholder="例：着信メールを確認"/>`, 'この手順で何をするかを短く書きます（全角10字前後）。', '手順の見出し')}
       ${fld('説明', html`<textarea id="node-desc" rows="3" value=${selNode.desc} onChange=${setN('desc')} placeholder="例：前日17時以降の受信分。上司・取引先からのものを優先"></textarea>`, '対象・条件・範囲を具体的に書くほど、AIが迷わずに動けます。', '「内容：」')}
       ${fld('ツール・接続先', html`<input id="node-tool" value=${selNode.tool} onChange=${setN('tool')} placeholder="例：Outlook、Web検索、Excel"/>`, '使うサービスやプラグインの名前です。ChatGPTでは「@Outlook」のように呼ぶものです。', '「使用ツール：」')}
