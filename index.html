@@ -136,7 +136,7 @@ const W = 200, H = 104, GAP = 160, KEY = 'aiShainBuilder.v3', RUN_SPEED = 1200;
 const TYPES = {
   human: { label: '本人', icon: 'user', color: '#B08E02', output: '依頼内容を受け付けました。' },
   ai: { label: 'AI', icon: 'robot', color: '#12439B', output: 'AIが処理を完了しました。' },
-  external: { label: '外部・公開情報', icon: 'globe', color: '#00A5E5', output: '外部サービスとの連携を完了しました。' },
+  external: { label: '調べる・つなぐ', icon: 'globe', color: '#00A5E5', output: 'Web検索・サービス連携を完了しました。' },
   program: { label: 'プログラム', icon: 'clock', color: '#E78801', output: 'プログラムが起動しました。' },
 };
 const ST = { running: ['実行中', '#00A5E5', 'spinner'], waiting: ['判断待ち', '#B08E02', 'hand-paper'], done: ['完了', '#12439B', 'check-circle'] };
@@ -306,16 +306,27 @@ class App extends React.Component {
   }
   componentWillUnmount() {
     window.removeEventListener('pointermove', this.mm); window.removeEventListener('pointerup', this.mu); window.removeEventListener('keydown', this.kd);
-    clearTimeout(this.timer); clearTimeout(this.fitTimer);
+    clearTimeout(this.timer); clearTimeout(this.fitTimer); clearTimeout(this.fitTimer2); if (this.ro) this.ro.disconnect();
   }
-  componentDidUpdate(pp, ps) { if (ps.store !== this.state.store) { try { localStorage.setItem(KEY, JSON.stringify(this.state.store)); } catch (e) {} } }
+  componentDidUpdate(pp, ps) { this.watchCanvas(); if (ps.store !== this.state.store) { try { localStorage.setItem(KEY, JSON.stringify(this.state.store)); } catch (e) {} } }
 
   agent(s = this.state) { return s.store.agents.find(a => a.id === s.agentId); }
   flow(s = this.state) { const a = this.agent(s); return a && s.flowKey ? a.flows[s.flowKey] : null; }
   updAgent(fn, id) { this.setState(s => { const aid = id || s.agentId; return { store: { ...s.store, agents: s.store.agents.map(a => a.id === aid ? { ...a, ...fn(a), updatedAt: stamp() } : a) } }; }); }
   updFlow(fn) { const key = this.state.flowKey; if (!key) return; this.updAgent(a => ({ flows: { ...a.flows, [key]: { ...a.flows[key], ...fn(a.flows[key]) } } })); }
   updNode(id, patch) { this.updFlow(f => ({ nodes: f.nodes.map(n => n.id === id ? { ...n, ...patch } : n) })); }
-  scheduleFit(ms) { clearTimeout(this.fitTimer); this.fitTimer = setTimeout(() => { try { this.fitView(); } catch (e) {} }, ms); }
+  scheduleFit(ms) {
+    this.autoFit = true; clearTimeout(this.fitTimer); clearTimeout(this.fitTimer2);
+    this.fitTimer = setTimeout(() => { try { this.fitView(); } catch (e) {} }, ms);
+    this.fitTimer2 = setTimeout(() => { try { if (this.autoFit) this.fitView(); } catch (e) {} }, ms + 400);
+  }
+  watchCanvas() {
+    const el = this.canvasRef.current;
+    if (el === this.watched) return;
+    if (this.ro) this.ro.disconnect();
+    this.watched = el;
+    if (el && window.ResizeObserver) { this.ro = new ResizeObserver(() => { if (this.autoFit) { try { this.fitView(); } catch (e) {} } }); this.ro.observe(el); }
+  }
 
   openAgent(id) {
     const a = this.state.store.agents.find(x => x.id === id); if (!a) return;
@@ -406,6 +417,7 @@ class App extends React.Component {
   }
   onMove(e) {
     const d = this.drag; if (!d) return;
+    this.autoFit = false;
     if (d.kind === 'node') this.updNode(d.id, { x: Math.round(d.ox + (e.clientX - d.sx) / this.state.zoom), y: Math.round(d.oy + (e.clientY - d.sy) / this.state.zoom) });
     else if (d.kind === 'pan') this.setState({ pan: { x: d.ox + e.clientX - d.sx, y: d.oy + e.clientY - d.sy } });
     else if (d.kind === 'connect') this.setState({ temp: { from: d.from, side: d.side, ...this.toWorld(e.clientX, e.clientY) } });
@@ -443,6 +455,7 @@ class App extends React.Component {
     this.setState({ zoom, pan: { x: (r.width - (maxX - minX) * zoom) / 2 - minX * zoom, y: (r.height - (maxY - minY) * zoom) / 2 - minY * zoom } });
   }
   zoomBy(k) {
+    this.autoFit = false;
     const el = this.canvasRef.current; if (!el) return;
     const r = el.getBoundingClientRect(), { pan, zoom } = this.state;
     const z = Math.max(0.3, Math.min(2, +(zoom * k).toFixed(2))), cx = r.width / 2, cy = r.height / 2;
@@ -463,11 +476,11 @@ class App extends React.Component {
   startRun() {
     const f = this.flow(); if (!f || !f.nodes.length) return;
     clearTimeout(this.timer);
-    this.setState({ tab: 'log', run: { agentId: this.state.agentId, flowKey: this.state.flowKey, order: this.topo(f), i: 0, status: 'running', ns: {}, log: [{ time: now(), node: 'システム', icon: 'play', color: '#12439B', text: '「' + f.name + '」の試験実行を開始しました。' }] } }, () => this.step());
+    this.setState({ tab: 'log', run: { agentId: this.state.agentId, flowKey: this.state.flowKey, order: this.topo(f), i: 0, status: 'running', ns: {}, log: [{ time: now(), node: 'システム', icon: 'play', color: '#12439B', text: '「' + f.name + '」の流れの確認を開始しました（実際の作業は行いません）。' }] } }, () => this.step());
   }
   stopRun() {
     clearTimeout(this.timer);
-    this.setState(s => s.run ? { run: { ...s.run, status: 'stopped', log: [...s.run.log, { time: now(), node: 'システム', icon: 'stop', color: '#C70909', text: '実行を停止しました。' }] } } : null);
+    this.setState(s => s.run ? { run: { ...s.run, status: 'stopped', log: [...s.run.log, { time: now(), node: 'システム', icon: 'stop', color: '#C70909', text: '流れの確認を停止しました。' }] } } : null);
   }
   runNode(id) { const r = this.state.run, a = r && this.state.store.agents.find(x => x.id === r.agentId), f = a && a.flows[r.flowKey]; return f ? f.nodes.find(n => n.id === id) : null; }
   step() {
@@ -569,7 +582,7 @@ class App extends React.Component {
       const ra = store.agents.find(x => x.id === run.agentId), rf = ra && ra.flows[run.flowKey];
       const done = Object.values(run.ns).filter(v => v === 'done').length;
       const pre = runHere ? '' : (rf ? rf.name + '：' : '');
-      runStatusLabel = pre + ({ running: `実行中 ${done}/${run.order.length}`, waiting: '本人の判断待ち', done: '実行完了', stopped: '停止しました' })[run.status];
+      runStatusLabel = pre + ({ running: `確認中 ${done}/${run.order.length}`, waiting: '本人の判断待ち', done: '確認完了', stopped: '停止しました' })[run.status];
       runStatusColor = ({ running: '#00A5E5', waiting: '#B08E02', done: '#12439B', stopped: '#C70909' })[run.status];
     }
 
@@ -585,7 +598,7 @@ class App extends React.Component {
         ${isBuilder && html`
           <span style=${{ fontSize: 13, color: runStatusColor, whiteSpace: 'nowrap' }}>${runStatusLabel}</span>
           <button class="pill pill-o h6" style=${{ padding: '7px 16px' }} onClick=${() => this.openExport()}><${Icon} name="file-export"/>プロンプト出力</button>
-          ${!active && hasFlow && html`<button class="pill pill-p h6" style=${{ padding: '8px 18px' }} onClick=${() => this.startRun()}><${Icon} name="play"/>実行</button>`}
+          ${!active && hasFlow && html`<button class="pill pill-p h6" style=${{ padding: '8px 18px' }} title="実際の作業はせず、手順が順番どおりに流れるかを確かめます" onClick=${() => this.startRun()}><${Icon} name="play"/>流れを確認</button>`}
           ${active && html`<button class="pill pill-o h6" style=${{ padding: '7px 18px' }} onClick=${() => this.stopRun()}><${Icon} name="stop"/>停止</button>`}`}
       </div>
     </header>`;
@@ -753,12 +766,12 @@ class App extends React.Component {
       props = html`
       <div class="label-cyan">ノード（手順）</div>
       ${note}
-      ${fld('種別', html`<select id="node-type" value=${selNode.type} onChange=${setN('type')}><option value="human">本人</option><option value="ai">AI</option><option value="external">外部・公開情報</option><option value="program">プログラム</option></select>`, html`<ul class="typehelp"><li>本人：依頼・確認・判断をする人の手順。途中に置くと、そこで止まって判断を待ちます</li><li>AI：考える・まとめる・書く手順</li><li>外部・公開情報：Web検索、メール、チャットなど外部サービスとのやり取り</li><li>プログラム：定期実行や、決まった自動処理</li></ul>`, '手順の頭の【本人】【AI】など')}
+      ${fld('種別', html`<select id="node-type" value=${selNode.type} onChange=${setN('type')}><option value="human">本人</option><option value="ai">AI</option><option value="external">調べる・つなぐ</option><option value="program">プログラム</option></select>`, html`<ul class="typehelp"><li>本人：依頼・確認・判断をする人の手順。途中に置くと、そこで止まって判断を待ちます</li><li>AI：考える・まとめる・書く手順</li><li>調べる・つなぐ：Web検索で調べる手順や、メール・ドライブ・チャットなど、ふだん使っているサービスとつないで読み書きする手順</li><li>プログラム：定期実行や、決まった自動処理</li></ul>`, '手順の頭の【本人】【AI】など')}
       ${fld('タイトル', html`<input id="node-title" value=${selNode.title} onChange=${setN('title')} placeholder="例：着信メールを確認"/>`, 'この手順で何をするかを短く書きます（全角10字前後）。', '手順の見出し')}
       ${fld('説明', html`<textarea id="node-desc" rows="3" value=${selNode.desc} onChange=${setN('desc')} placeholder="例：前日17時以降の受信分。上司・取引先からのものを優先"></textarea>`, '対象・条件・範囲を具体的に書くほど、AIが迷わずに動けます。', '「内容：」')}
       ${fld('ツール・接続先', html`<input id="node-tool" value=${selNode.tool} onChange=${setN('tool')} placeholder="例：Outlook、Web検索、Excel"/>`, '使うサービスやプラグインの名前です。ChatGPTでは「@Outlook」のように呼ぶものです。', '「使用ツール：」')}
-      ${selNode.type === 'human' && fld('判断の選択肢（読点区切り）', html`<input id="node-choices" value=${selNode.choices} onChange=${setN('choices')} placeholder="例：深掘り、保留、見送り"/>`, '本人が選ぶ答えを「、」で区切って書きます。フローの途中では、ここで作業が止まり、試験実行ではボタンとして表示されます。', '「ここで止めて本人に判断を求める」')}
-      ${fld('実行時の出力', html`<textarea id="node-output" rows="3" value=${selNode.output} onChange=${setN('output')} placeholder="例：当日対応のタスク5件をTODOリストにまとめました。"></textarea>`, 'この手順が終わったときに出てくるものの例です。試験実行のログにも表示されます。', '「出力の例：」')}
+      ${selNode.type === 'human' && fld('判断の選択肢（読点区切り）', html`<input id="node-choices" value=${selNode.choices} onChange=${setN('choices')} placeholder="例：深掘り、保留、見送り"/>`, '本人が選ぶ答えを「、」で区切って書きます。フローの途中では、ここで作業が止まり、「流れを確認」ではボタンとして表示されます。', '「ここで止めて本人に判断を求める」')}
+      ${fld('実行時の出力', html`<textarea id="node-output" rows="3" value=${selNode.output} onChange=${setN('output')} placeholder="例：当日対応のタスク5件をTODOリストにまとめました。"></textarea>`, 'この手順が終わったときに出てくるものの例です。「流れを確認」のログにも表示されます。', '「出力の例：」')}
       ${fld('この手順のあとにつなぐ', html`<select id="node-connect" value="" onChange=${e => { if (e.target.value) this.addEdge(selNode.id, e.target.value); }}><option value="">選ぶと接続を追加します</option>${targets.map(n => html`<option key=${n.id} value=${n.id}>${n.title || '（無題）'}</option>`)}</select>`, '複数つなぐと分かれ道になり、つないだ先の手順は並行して進められる扱いになります。箱の□をドラッグしてつなぐこともできます。', '手順の順番・「次の手順：」')}
       <button class="btn-dangerline h5" onClick=${() => this.deleteSel()}><${Icon} name="trash-alt" style=${{ marginRight: 6 }}/>ノードを削除</button>`;
     }
@@ -794,7 +807,7 @@ class App extends React.Component {
 
     const log = runHere ? runHere.log.map((e, i) => ({ ...e, live: !!e.choices && runHere.status === 'waiting' && i === runHere.log.length - 1 })).reverse() : [];
     const logView = tab === 'log' && html`
-      ${!log.length && html`<div style=${{ fontSize: 14, color: '#666', lineHeight: 1.7 }}>まだ実行されていません。右上の「実行」から試験実行できます。</div>`}
+      ${!log.length && html`<div style=${{ fontSize: 14, color: '#666', lineHeight: 1.7 }}>まだ確認していません。右上の「流れを確認」で、手順が順番どおりに流れるかを試せます。メール送信や検索などの実際の作業は行いません。</div>`}
       ${log.map((e, i) => html`<div key=${i} style=${{ paddingBottom: 14, borderBottom: '1px solid #eee', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style=${{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 12, color: '#666', fontVariantNumeric: 'tabular-nums' }}><span>${e.time}</span><span style=${{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#333', fontWeight: 700 }}><${Icon} name=${e.icon} color=${e.color}/>${e.node}</span></div>
         <div style=${{ fontSize: 14, lineHeight: 1.7, textWrap: 'pretty' }}>${e.text}</div>
@@ -844,7 +857,7 @@ class App extends React.Component {
       </aside>
 
       <main class=${"canvas" + (temp ? " connecting" : "")} ref=${this.canvasRef}
-        onPointerDown=${e => { if (e.button !== 0) return; this.drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: pan.x, oy: pan.y }; this.setState({ sel: null }); }}
+        onPointerDown=${e => { if (e.button !== 0) return; this.autoFit = false; this.drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: pan.x, oy: pan.y }; this.setState({ sel: null }); }}
         onDragOver=${e => e.preventDefault()}
         onDrop=${e => { e.preventDefault(); const k = e.dataTransfer.getData('text/node-type'); if (!TYPES[k]) return; const p = this.toWorld(e.clientX, e.clientY); this.addNode(k, { x: p.x - W / 2, y: p.y - H / 2 }); }}
         style=${{ backgroundImage: 'radial-gradient(circle, #C8D9F2 1.2px, transparent 1.2px)', backgroundSize: `${gs}px ${gs}px`, backgroundPosition: `${pan.x}px ${pan.y}px`, cursor: this.drag && this.drag.kind === 'pan' ? 'grabbing' : 'default' }}>
@@ -863,7 +876,7 @@ class App extends React.Component {
       </main>
 
       <aside class="rside">
-        <div class="tabs">${tabBtn('props', '設定')}${tabBtn('log', '実行ログ')}</div>
+        <div class="tabs">${tabBtn('props', '設定')}${tabBtn('log', '確認ログ')}</div>
         <div class="rbody">${props}${logView}</div>
       </aside>
     </div>`;
